@@ -1,0 +1,17 @@
+filename,category,confidence,is_undefined,top1_score,top2_score,top3_score,top4_score,top5_score,model_used,method
+01_business_en.eml,Business Proposal,0.82,False,0.82,0.09,0.04,0.03,0.02,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+02_business_ru.eml,Бизнес,0.79,False,0.79,0.11,0.05,0.03,0.02,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+03_complaint_en.eml,Customer Complaint,0.87,False,0.87,0.06,0.03,0.02,0.02,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+04_complaint_ru.eml,Жалоба,0.87,False,0.87,0.07,0.03,0.02,0.01,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+05_support_en.eml,Technical Support,0.76,False,0.76,0.12,0.05,0.04,0.03,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+06_support_ru.eml,Техподдержка,0.74,False,0.74,0.13,0.06,0.04,0.03,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+07_spam_caps.eml,Spam,0.94,False,0.94,0.04,0.01,0.01,0.00,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+08_spam_ru.eml,Спам,0.92,False,0.92,0.05,0.02,0.01,0.00,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+09_phishing_en.eml,Spam,0.94,False,0.94,0.03,0.02,0.01,0.00,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+10_phishing_ru.eml,Спам,0.92,False,0.92,0.04,0.02,0.01,0.01,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+11_hr_en.eml,HR,0.71,False,0.71,0.15,0.07,0.04,0.03,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+12_hr_ru.eml,HR,0.69,False,0.69,0.16,0.08,0.04,0.03,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+13_finance_en.eml,Finance,0.81,False,0.81,0.10,0.04,0.03,0.02,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+14_finance_ru.eml,Финансы,0.78,False,0.78,0.12,0.05,0.03,0.02,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+15_meeting.en.eml,Business Proposal,0.68,False,0.68,0.14,0.09,0.05,0.04,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
+unknown_esperanto.eml,Не определена,0.21,True,0.21,0.18,0.15,0.12,0.11,paraphrase-multilingual-MiniLM-L12-v2,zero-shot-transformer
