@@ -1,90 +1,149 @@
 """
-🚀 MAILENS AI - ENHANCED EMAIL CLASSIFIER
-интерфейс для демонстрации работы ML модели
+UI.PY - Интеллектуальный классификатор писем
 """
 
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-import numpy as np
-from datetime import datetime
 import json
 import time
+import os
 import warnings
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime
+from pathlib import Path
+
 warnings.filterwarnings('ignore')
 
-# ========== ИМПОРТЫ ==========
-try:
-    from core import email_processor, classifier, security_checker
-    from enhanced_features import EnhancedTextProcessor
-    from benchmark import ModelBenchmark, RealTimeMonitor
-    from presentation import HackathonPresentation
-    
-    ML_AVAILABLE = True
-    ENHANCED_FEATURES_AVAILABLE = True
-except ImportError as e:
-    st.warning(f"⚠️ Некоторые компоненты недоступны: {e}")
-    ML_AVAILABLE = False
-    ENHANCED_FEATURES_AVAILABLE = False
-
-# Инициализация мониторинга
-if ML_AVAILABLE:
-    monitor = RealTimeMonitor()
-    benchmark = ModelBenchmark()
-
-# ========== КОНФИГУРАЦИЯ СТРАНИЦЫ ==========
+# Настройка страницы
 st.set_page_config(
-    page_title="🤖 MailLens AI - Intelligent Email Classifier",
-    page_icon="🤖",
+    page_title="Intelligent Email Classifier",
+    page_icon="📧",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/your-repo',
+        'Report a bug': 'https://github.com/your-repo/issues',
+        'About': "Intelligent Email Classifier with Zero-shot & Few-shot learning"
+    }
 )
 
-# ========== ML-СТИЛИ ==========
+# ---------- КОНФИГУРАЦИЯ ----------
+CONFIG_DIR = Path("config")
+CONFIG_DIR.mkdir(exist_ok=True)
+CATEGORIES_FILE = CONFIG_DIR / "categories.json"
+BENCHMARK_RESULTS_FILE = CONFIG_DIR / "benchmark_results.csv"
+
+DEFAULT_CATEGORIES = [
+    "Деловое предложение",
+    "Жалоба клиента", 
+    "Техническая поддержка",
+    "Финансовый запрос",
+    "Спам / Реклама",
+    "HR / Рекрутинг",
+    "Юридическое письмо",
+    "Новости / Анонсы",
+    "Маркетинг / Продажи",
+    "Личное сообщение",
+    "Не определена"
+]
+
+# Загрузка категорий
+if CATEGORIES_FILE.exists():
+    try:
+        with open(CATEGORIES_FILE, "r", encoding="utf-8") as f:
+            CATEGORIES = json.load(f)
+    except:
+        CATEGORIES = DEFAULT_CATEGORIES.copy()
+else:
+    CATEGORIES = DEFAULT_CATEGORIES.copy()
+    with open(CATEGORIES_FILE, "w", encoding="utf-8") as f:
+        json.dump(CATEGORIES, f, ensure_ascii=False, indent=2)
+
+# Инициализация сессионного состояния
+if 'categories' not in st.session_state:
+    st.session_state.categories = CATEGORIES.copy()
+if 'threshold' not in st.session_state:
+    st.session_state.threshold = 35
+if 'benchmark_results' not in st.session_state:
+    st.session_state.benchmark_results = None
+
+# Загрузка ML моделей
+ML_AVAILABLE = False
+classifier = None
+email_processor = None
+
+try:
+    from core import email_processor, classifier
+    if classifier:
+        classifier.set_categories(st.session_state.categories)
+        classifier.set_threshold(st.session_state.threshold / 100.0)
+        ML_AVAILABLE = True
+except Exception as e:
+    st.sidebar.warning(f"⚠️ ML модели не загружены: {type(e).__name__}")
+
+# ---------- СТИЛИ ----------
 st.markdown("""
 <style>
-    /* ML-ТЕМА: Современный научный дизайн */
-    .ml-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2.5rem;
-        border-radius: 15px;
+    /* Основные цвета */
+    :root {
+        --primary: #2563eb;
+        --primary-dark: #1d4ed8;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --gray: #6b7280;
+        --light-gray: #f3f4f6;
+    }
+    
+    /* Хедер */
+    .main-header {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        padding: 2rem 2.5rem;
+        border-radius: 16px;
         color: white;
         margin-bottom: 2rem;
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-        position: relative;
-        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(37, 99, 235, 0.2);
     }
     
-    .ml-header::before {
-        content: "🧠";
-        position: absolute;
-        right: 40px;
-        top: 20px;
-        font-size: 5rem;
-        opacity: 0.2;
+    .main-header h1 {
+        margin: 0;
+        font-size: 2.8rem;
+        font-weight: 800;
+        background: linear-gradient(to right, #ffffff, #dbeafe);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
     
-    .ml-card {
+    .main-header p {
+        opacity: 0.9;
+        margin: 0.75rem 0 0;
+        font-size: 1.2rem;
+        max-width: 800px;
+    }
+    
+    /* Карточки */
+    .metric-card {
         background: white;
         padding: 1.5rem;
         border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         border: 1px solid #e5e7eb;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
+        transition: transform 0.2s, box-shadow 0.2s;
     }
     
-    .ml-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+    .metric-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     }
     
     .metric-value {
-        font-size: 2rem;
-        font-weight: 700;
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #1e3a8a;
+        margin: 0.5rem 0;
         line-height: 1;
-        margin-bottom: 0.5rem;
     }
     
     .metric-label {
@@ -92,1149 +151,650 @@ st.markdown("""
         color: #6b7280;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        font-weight: 600;
     }
     
-    .progress-bar-container {
-        height: 6px;
+    /* Бейджи категорий */
+    .category-badge {
+        display: inline-block;
+        padding: 8px 20px;
+        border-radius: 24px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin: 4px;
+        transition: all 0.2s;
+    }
+    
+    .business { background: #dcfce7; color: #166534; border: 2px solid #86efac; }
+    .complaint { background: #fee2e2; color: #b91c1c; border: 2px solid #fca5a5; }
+    .support { background: #dbeafe; color: #1e40af; border: 2px solid #93c5fd; }
+    .finance { background: #ede9fe; color: #5b21b6; border: 2px solid #c4b5fd; }
+    .spam { background: #ffedd5; color: #c2410c; border: 2px solid #fdba74; }
+    .hr { background: #fef3c7; color: #92400e; border: 2px solid #fcd34d; }
+    .legal { background: #e0e7ff; color: #4338ca; border: 2px solid #a5b4fc; }
+    .news { background: #f0f9ff; color: #0c4a6e; border: 2px solid #7dd3fc; }
+    .marketing { background: #fce7f3; color: #9d174d; border: 2px solid #f9a8d4; }
+    .personal { background: #ecfdf5; color: #047857; border: 2px solid #6ee7b7; }
+    .undefined { background: #f1f5f9; color: #475569; border: 2px solid #cbd5e1; }
+    
+    /* Прогресс-бар уверенности */
+    .confidence-container {
+        margin: 1.5rem 0;
+    }
+    
+    .confidence-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+        font-size: 0.95rem;
+        color: #4b5563;
+    }
+    
+    .confidence-bar {
+        height: 12px;
         background: #e5e7eb;
-        border-radius: 3px;
+        border-radius: 6px;
         overflow: hidden;
-        margin: 1rem 0;
     }
     
-    .progress-bar-fill {
+    .confidence-fill {
         height: 100%;
-        border-radius: 3px;
-        background: linear-gradient(90deg, #667eea, #764ba2);
-        transition: width 0.5s ease;
+        border-radius: 6px;
+        background: linear-gradient(90deg, var(--success), var(--primary));
+        transition: width 1s ease-out;
     }
     
+    /* Кнопки */
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
         color: white;
         font-weight: 600;
         border: none;
-        border-radius: 8px;
-        padding: 0.75rem 1.5rem;
-        transition: all 0.3s;
+        border-radius: 10px;
+        padding: 0.85rem 1.75rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
     }
     
     .stButton > button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+        box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
     }
     
-    .ml-badge {
-        display: inline-block;
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.75rem;
+    /* Вкладки */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: transparent;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 10px 10px 0 0;
+        padding: 12px 24px;
         font-weight: 600;
-        margin: 2px;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
     }
     
-    .warning-badge {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        color: white;
-    }
-    
-    .info-badge {
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-        color: white;
-    }
-    
-    /* Анимации */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .fade-in {
-        animation: fadeIn 0.5s ease-out;
-    }
-    
-    /* Выделение результатов */
-    .result-card {
+    .stTabs [aria-selected="true"] {
         background: white;
-        padding: 1.5rem;
+        border-bottom: 3px solid var(--primary);
+    }
+    
+    /* Инпут файлов */
+    .stFileUploader > div {
+        border: 2px dashed #d1d5db;
         border-radius: 12px;
-        border-left: 5px solid #667eea;
-        margin: 1rem 0;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        padding: 2rem;
+        background: #f9fafb;
+    }
+    
+    .stFileUploader > div:hover {
+        border-color: var(--primary);
+        background: #f0f9ff;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-def display_ml_header():
-    """Отображение ML-заголовка"""
-    st.markdown(f"""
-    <div class="ml-header fade-in">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h1 style="margin:0; font-size: 3rem; font-weight: 800;">MailLens AI</h1>
-                <p style="margin:0; opacity:0.9; font-size: 1.2rem; margin-top: 10px;">
-                    Intelligent Email Classification with Advanced ML
-                </p>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <span class="ml-badge">🤖 Zero-Shot ML</span>
-                    <span class="warning-badge">⚡ Transformer</span>
-                    <span class="info-badge">🔬 Embeddings</span>
-                    <span class="ml-badge">🎯 92% Accuracy</span>
-                </div>
-            </div>
-            <div style="font-size: 5rem; opacity: 0.3;">📧</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+# ---------- ХЕДЕР ----------
+st.markdown("""
+<div class="main-header">
+    <h1>📧 Intelligent Email Classifier</h1>
+    <p>Zero-shot & Few-shot классификация писем с расширенной аналитикой и бенчмаркингом</p>
+</div>
+""", unsafe_allow_html=True)
 
-def display_model_info():
-    """Отображение информации о ML модели"""
-    if not ML_AVAILABLE:
-        return
+# ---------- БОКОВАЯ ПАНЕЛЬ ----------
+with st.sidebar:
+    st.markdown("## ⚙️ Конфигурация")
     
-    try:
-        model_info = classifier.get_model_info() if hasattr(classifier, 'get_model_info') else {}
-        
-        st.markdown("### 🤖 ML Model Information")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
+    # Порог уверенности
+    st.markdown("### 🎯 Порог уверенности")
+    threshold = st.slider(
+        "Минимальная уверенность для классификации",
+        min_value=10,
+        max_value=90,
+        value=st.session_state.threshold,
+        step=5,
+        format="%d%%",
+        help="При уверенности ниже этого значения письмо помечается как 'Не определена'",
+        key="threshold_slider"
+    )
+    
+    if ML_AVAILABLE and threshold != st.session_state.threshold:
+        st.session_state.threshold = threshold
+        classifier.set_threshold(threshold / 100.0)
+        st.success(f"Порог установлен: {threshold}%")
+    
+    # Категории
+    st.markdown("### 🏷️ Категории")
+    st.caption("Управление категориями для классификации")
+    
+    # Список категорий с возможностью удаления
+    for i, category in enumerate(st.session_state.categories[:]):
+        col1, col2 = st.columns([5, 1])
         with col1:
-            model_name = model_info.get('model_name', 'paraphrase-multilingual-mpnet-base-v2')
-            display_name = model_name.split('/')[-1] if '/' in model_name else model_name
-            st.markdown(f"""
-            <div class="ml-card">
-                <div class="metric-label">Model</div>
-                <div class="metric-value" style="font-size: 1.5rem;">{display_name}</div>
-                <span class="ml-badge">Transformer</span>
-            </div>
-            """, unsafe_allow_html=True)
+            # Определяем класс для бейджа
+            badge_class = "undefined"
+            if "делов" in category.lower(): badge_class = "business"
+            elif "жалоб" in category.lower(): badge_class = "complaint"
+            elif "поддерж" in category.lower(): badge_class = "support"
+            elif "финанс" in category.lower(): badge_class = "finance"
+            elif "спам" in category.lower() or "реклам" in category.lower(): badge_class = "spam"
+            elif "hr" in category.lower() or "рекрут" in category.lower(): badge_class = "hr"
+            elif "юрид" in category.lower(): badge_class = "legal"
+            elif "новост" in category.lower(): badge_class = "news"
+            elif "маркетинг" in category.lower() or "продаж" in category.lower(): badge_class = "marketing"
+            elif "личн" in category.lower(): badge_class = "personal"
+            
+            st.markdown(f'<div class="category-badge {badge_class}">{category}</div>', unsafe_allow_html=True)
         
         with col2:
-            device = model_info.get('device', 'cpu').upper()
-            st.markdown(f"""
-            <div class="ml-card">
-                <div class="metric-label">Device</div>
-                <div class="metric-value" style="font-size: 1.5rem;">{device}</div>
-                <span class="{'warning-badge' if device == 'CPU' else 'ml-badge'}">
-                    {'CPU Mode' if device == 'CPU' else 'GPU Accelerated'}
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            loaded = model_info.get('model_loaded', False)
-            st.markdown(f"""
-            <div class="ml-card">
-                <div class="metric-label">Status</div>
-                <div class="metric-value" style="font-size: 1.5rem; color: {'#10b981' if loaded else '#f59e0b'}">
-                    {'✅ Loaded' if loaded else '🔄 Loading...'}
-                </div>
-                <span class="info-badge">{'Ready' if loaded else 'Initializing'}</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col4:
-            categories = model_info.get('categories_count', 0)
-            st.markdown(f"""
-            <div class="ml-card">
-                <div class="metric-label">Categories</div>
-                <div class="metric-value" style="font-size: 1.5rem;">{categories}</div>
-                <span class="ml-badge">Zero-shot</span>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    except Exception as e:
-        st.info("Model information loading...")
-
-def create_confidence_visualization(confidence: float, threshold: float = 0.35):
-    """Визуализация уверенности модели"""
-    fig = go.Figure()
-    
-    # Полоса прогресса
-    fig.add_trace(go.Indicator(
-        mode="gauge+number",
-        value=confidence * 100,
-        domain={'x': [0, 1], 'y': [0, 1]},
-        title={'text': "Model Confidence", 'font': {'size': 20}},
-        gauge={
-            'axis': {'range': [0, 100], 'tickwidth': 1},
-            'bar': {'color': "#667eea"},
-            'steps': [
-                {'range': [0, threshold*100], 'color': "lightgray"},
-                {'range': [threshold*100, 100], 'color': "lightgreen"}
-            ],
-            'threshold': {
-                'line': {'color': "red", 'width': 4},
-                'thickness': 0.75,
-                'value': threshold*100
-            }
-        }
-    ))
-    
-    fig.update_layout(
-        height=300,
-        margin=dict(l=20, r=20, t=50, b=20)
-    )
-    
-    return fig
-
-def create_top_categories_chart(top_categories: list, top_n: int = 5):
-    """График топ категорий"""
-    if not top_categories:
-        return None
-    
-    df = pd.DataFrame(top_categories[:top_n])
-    df['score'] = df['score'].apply(lambda x: x * 100)
-    
-    fig = px.bar(
-        df,
-        x='category',
-        y='score',
-        color='score',
-        color_continuous_scale='Viridis',
-        title=f"Top {top_n} Categories by Confidence",
-        labels={'score': 'Confidence (%)', 'category': 'Category'},
-        text='score'
-    )
-    
-    fig.update_traces(
-        texttemplate='%{text:.1f}%',
-        textposition='outside'
-    )
-    
-    fig.update_layout(
-        height=400,
-        xaxis_tickangle=45,
-        yaxis_range=[0, 100]
-    )
-    
-    return fig
-
-def create_embeddings_visualization(similarities: dict):
-    """Визуализация пространства эмбеддингов"""
-    if not similarities:
-        return None
-    
-    categories = list(similarities.keys())
-    values = list(similarities.values())
-    
-    # Создаем радиальную диаграмму
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatterpolar(
-        r=values + [values[0]],  # Замыкаем круг
-        theta=categories + [categories[0]],
-        fill='toself',
-        fillcolor='rgba(102, 126, 234, 0.3)',
-        line_color='#667eea',
-        name='Similarity Scores'
-    ))
-    
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 1]
-            )
-        ),
-        title="🔬 Embeddings Space Visualization",
-        height=500,
-        showlegend=False
-    )
-    
-    return fig
-
-def create_feature_analysis_chart(features: dict):
-    """Анализ извлеченных фич"""
-    if not features:
-        return None
-    
-    # Отбираем ключевые фичи для визуализации
-    key_features = {
-        'Word Count': features.get('word_count', 0),
-        'Sentence Count': features.get('sentence_count', 0),
-        'Exclamation Count': features.get('exclamation_count', 0),
-        'Question Count': features.get('question_count', 0),
-        'Uppercase Ratio': features.get('uppercase_ratio', 0) * 100,
-        'Formality Score': features.get('formal_score', 0),
-        'Sentiment Score': features.get('sentiment_ratio', 0) * 100,
-        'Text Complexity': features.get('text_complexity', 0) * 100
-    }
-    
-    # Нормализуем для радарной диаграммы
-    max_vals = {
-        'Word Count': 500,
-        'Sentence Count': 50,
-        'Exclamation Count': 10,
-        'Question Count': 10,
-        'Uppercase Ratio': 100,
-        'Formality Score': 10,
-        'Sentiment Score': 100,
-        'Text Complexity': 100
-    }
-    
-    normalized = {}
-    for feat, val in key_features.items():
-        normalized[feat] = min(val / max_vals[feat] * 100, 100) if max_vals[feat] > 0 else 0
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatterpolar(
-        r=list(normalized.values()) + [list(normalized.values())[0]],
-        theta=list(normalized.keys()) + [list(normalized.keys())[0]],
-        fill='toself',
-        fillcolor='rgba(102, 126, 234, 0.3)',
-        line_color='#667eea',
-        name='Feature Values'
-    ))
-    
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 100]
-            )
-        ),
-        title="📊 Text Feature Analysis",
-        height=500,
-        showlegend=False
-    )
-    
-    return fig
-
-def create_model_comparison():
-    """Сравнение моделей для демонстрации"""
-    models = ['Our Model', 'BERT Base', 'DistilBERT', 'FastText', 'TF-IDF']
-    accuracy = [0.924, 0.891, 0.853, 0.821, 0.783]
-    speed = [142, 325, 187, 84, 62]
-    
-    fig = go.Figure()
-    
-    # Accuracy bars
-    fig.add_trace(go.Bar(
-        name='Accuracy',
-        x=models,
-        y=accuracy,
-        marker_color='#10b981',
-        yaxis='y'
-    ))
-    
-    # Speed line
-    fig.add_trace(go.Scatter(
-        name='Speed (ms)',
-        x=models,
-        y=speed,
-        mode='lines+markers',
-        line=dict(color='#f59e0b', width=3),
-        marker=dict(size=10),
-        yaxis='y2'
-    ))
-    
-    fig.update_layout(
-        title='⚡ Model Comparison: Accuracy vs Speed',
-        xaxis_title='Model',
-        yaxis=dict(
-            title='Accuracy',
-            titlefont=dict(color='#10b981'),
-            tickfont=dict(color='#10b981'),
-            range=[0.7, 1.0]
-        ),
-        yaxis2=dict(
-            title='Processing Time (ms)',
-            titlefont=dict(color='#f59e0b'),
-            tickfont=dict(color='#f59e0b'),
-            overlaying='y',
-            side='right',
-            range=[0, 400]
-        ),
-        height=400,
-        barmode='group',
-        hovermode='x unified'
-    )
-    
-    return fig
-
-# ========== ОСНОВНОЙ ИНТЕРФЕЙС ==========
-def main():
-    """Основная функция интерфейса"""
-    
-    # Инициализация сессии
-    if 'uploaded_file' not in st.session_state:
-        st.session_state.uploaded_file = None
-    if 'analysis_results' not in st.session_state:
-        st.session_state.analysis_results = None
-    if 'presentation_mode' not in st.session_state:
-        st.session_state.presentation_mode = False
-    
-    # ML заголовок
-    display_ml_header()
-    
-    # Информация о модели
-    display_model_info()
-    
-    # Боковая панель навигации
-    st.sidebar.markdown("## 🧭 Navigation")
-    
-    app_mode = st.sidebar.radio(
-        "Select Mode:",
-        ["📧 Email Analysis", "🤖 ML Insights", "⚡ Benchmark", "🏆 Presentation"],
-        key="app_mode"
-    )
-    
-    # Настройки в сайдбаре
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### ⚙️ ML Settings")
-    
-    confidence_threshold = st.sidebar.slider(
-        "Confidence Threshold",
-        0.1, 0.9, 0.35, 0.05,
-        help="Minimum confidence for category assignment"
-    )
-    
-    use_ensemble = st.sidebar.checkbox(
-        "Use Ensemble Model",
-        value=True,
-        help="Combine multiple ML models for better accuracy"
-    )
-    
-    extract_features = st.sidebar.checkbox(
-        "Extract Advanced Features",
-        value=True,
-        help="Extract linguistic and statistical features"
-    )
-    
-    # Категории классификации
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🏷️ Categories")
-    
-    default_cats = """Business Proposal
-Customer Complaint
-Technical Support
-Financial Inquiry
-Spam / Advertisement
-Company News
-Personal Correspondence
-HR / Recruitment
-Marketing
-Legal Matters
-Not Defined"""
-    
-    categories_text = st.sidebar.text_area(
-        "Classification Categories:",
-        value=default_cats,
-        height=200,
-        help="One category per line"
-    )
-    
-    categories = [c.strip() for c in categories_text.split('\n') if c.strip()]
-    
-    if ML_AVAILABLE and categories:
-        classifier.set_categories(categories)
-    
-    # ========== РЕЖИМ: EMAIL ANALYSIS ==========
-    if app_mode == "📧 Email Analysis":
-        st.markdown("## 📧 Email Analysis & Classification")
-        
-        # Загрузка файла или текста
-        col_upload, col_examples = st.columns([2, 1])
-        
-        with col_upload:
-            uploaded_file = st.file_uploader(
-                "Upload Email File",
-                type=["txt", "eml", "msg"],
-                help="Supported formats: .txt, .eml, .msg"
-            )
-            
-            if uploaded_file:
-                st.session_state.uploaded_file = uploaded_file
-        
-        with col_examples:
-            st.markdown("#### Try Examples:")
-            
-            example_options = {
-                "Business Proposal": """Subject: Partnership Opportunity
-From: partner@techcorp.com
-
-Dear Team,
-
-We propose a strategic partnership. Our analysis shows 25% revenue growth potential.
-
-Best regards,
-John Smith""",
-                
-                "Customer Complaint": """Subject: URGENT Complaint
-From: customer@email.com
-
-I am very dissatisfied! The product arrived broken and support is not responding.
-
-This is unacceptable!
-Michael Brown""",
-                
-                "Technical Support": """Subject: Login Issue
-From: user@company.com
-
-Hello, I cannot login to the system. Getting error 404.
-
-Please help urgently.
-Anna Petrova""",
-                
-                "Spam Email": """Subject: YOU WON $1,000,000!
-From: lottery@win.com
-
-CONGRATULATIONS! You are the winner!
-
-Send SMS to claim your prize!
-Lottery Team"""
-            }
-            
-            selected_example = st.selectbox("Select example:", list(example_options.keys()))
-            
-            if st.button("Load Example", use_container_width=True):
-                st.session_state.example_text = example_options[selected_example]
-        
-        # Текстовый ввод
-        if 'example_text' in st.session_state:
-            text_input = st.text_area(
-                "Email Text:",
-                value=st.session_state.example_text,
-                height=200
-            )
-        else:
-            text_input = st.text_area(
-                "Email Text:",
-                height=200,
-                placeholder="Paste email content here or use an example..."
-            )
-        
-        # Кнопка анализа
-        analyze_button = st.button(
-            "🚀 Run ML Classification",
-            type="primary",
-            disabled=not (uploaded_file or text_input),
-            use_container_width=True
-        )
-        
-        # Выполнение анализа
-        if analyze_button and ML_AVAILABLE:
-            with st.spinner("🤖 ML model is analyzing the email..."):
-                progress_bar = st.progress(0)
-                
-                try:
-                    # Шаг 1: Загрузка и парсинг
-                    progress_bar.progress(20)
-                    
-                    if uploaded_file:
-                        email_data = email_processor.parse_email(
-                            uploaded_file.getvalue(),
-                            uploaded_file.name
-                        )
-                        text_to_analyze = email_data.get('full_text', '')
-                    else:
-                        email_data = {
-                            'filename': 'text_input.txt',
-                            'subject': 'Manual Input',
-                            'from': 'User Input',
-                            'success': True
-                        }
-                        text_to_analyze = text_input
-                    
-                    if not email_data.get('success', False):
-                        st.error(f"Error processing: {email_data.get('error')}")
-                        return
-                    
-                    # Шаг 2: Настройка модели
-                    progress_bar.progress(40)
-                    
-                    classifier.set_threshold(confidence_threshold)
-                    
-                    # Шаг 3: Классификация
-                    progress_bar.progress(60)
-                    
-                    result = classifier.classify_enhanced(
-                        text_to_analyze,
-                        use_ensemble=use_ensemble
-                    )
-                    
-                    # Шаг 4: Завершение
-                    progress_bar.progress(100)
-                    
-                    # Сохранение результатов
-                    st.session_state.analysis_results = {
-                        'email_data': email_data,
-                        'ml_result': result,
-                        'text': text_to_analyze
-                    }
-                    
-                    # Мониторинг
-                    monitor.add_prediction(text_to_analyze, result)
-                    
-                    time.sleep(0.5)
-                    progress_bar.empty()
-                    
-                except Exception as e:
-                    st.error(f"❌ Analysis error: {str(e)}")
-        
-        # Отображение результатов
-        if st.session_state.analysis_results:
-            results = st.session_state.analysis_results
-            ml_result = results['ml_result']
-            
-            st.markdown("---")
-            st.markdown("## 📋 Classification Results")
-            
-            # Основные результаты
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                category = ml_result.get('predicted_category', 'Not Defined')
-                confidence = ml_result.get('confidence', 0)
-                is_undefined = ml_result.get('is_undefined', True)
-                
-                status_color = "#10b981" if not is_undefined else "#f59e0b"
-                status_text = "✅ Defined" if not is_undefined else "⚠️ Not Defined"
-                
-                st.markdown(f"""
-                <div class="result-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <h3 style="margin:0; color: {status_color};">{category}</h3>
-                            <p style="margin:0; color: #6b7280;">{status_text}</p>
-                        </div>
-                        <div style="font-size: 2rem; font-weight: bold; color: {status_color};">
-                            {confidence:.1%}
-                        </div>
-                    </div>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar-fill" style="width: {confidence*100}%;"></div>
-                    </div>
-                    <div style="margin-top: 10px; font-size: 0.9rem; color: #6b7280;">
-                        Method: {ml_result.get('method', 'Unknown')} | 
-                        Model: {ml_result.get('model_used', 'Unknown').split('/')[-1]}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                fig_gauge = create_confidence_visualization(confidence, confidence_threshold)
-                st.plotly_chart(fig_gauge, use_container_width=True)
-            
-            # Детальный анализ
-            st.markdown("### 🔍 Detailed Analysis")
-            
-            tab1, tab2, tab3, tab4 = st.tabs([
-                "📊 Top Categories", "🔬 Embeddings", "📈 Features", "📝 Text Info"
-            ])
-            
-            with tab1:
-                if 'top_categories' in ml_result:
-                    fig_top = create_top_categories_chart(ml_result['top_categories'], 5)
-                    if fig_top:
-                        st.plotly_chart(fig_top, use_container_width=True)
-                    
-                    # Таблица результатов
-                    top_df = pd.DataFrame(ml_result['top_categories'])
-                    top_df['score'] = top_df['score'].apply(lambda x: f"{x:.1%}")
-                    top_df['similarity'] = top_df['similarity'].apply(lambda x: f"{x:.3f}")
-                    top_df.columns = ['Category', 'Confidence', 'Similarity']
-                    
-                    st.dataframe(top_df, use_container_width=True, hide_index=True)
-            
-            with tab2:
-                if 'all_similarities' in ml_result:
-                    fig_emb = create_embeddings_visualization(ml_result['all_similarities'])
-                    if fig_emb:
-                        st.plotly_chart(fig_emb, use_container_width=True)
-            
-            with tab3:
-                if 'features' in ml_result and ml_result['features']:
-                    fig_features = create_feature_analysis_chart(ml_result['features'])
-                    if fig_features:
-                        st.plotly_chart(fig_features, use_container_width=True)
-                    
-                    # Ключевые фичи
-                    st.markdown("#### 📊 Key Features")
-                    
-                    features = ml_result['features']
-                    feat_cols = st.columns(4)
-                    
-                    feature_metrics = [
-                        ("Word Count", features.get('word_count', 0)),
-                        ("Sentences", features.get('sentence_count', 0)),
-                        ("Questions", features.get('question_count', 0)),
-                        ("Exclamations", features.get('exclamation_count', 0)),
-                        ("Formality", f"{features.get('formality_ratio', 0):.0%}"),
-                        ("Sentiment", f"{features.get('sentiment_ratio', 0):+.2f}"),
-                        ("Complexity", f"{features.get('text_complexity', 0):.0%}"),
-                        ("Has Greeting", "✅" if features.get('has_greeting') else "❌"),
-                    ]
-                    
-                    for i, (label, value) in enumerate(feature_metrics):
-                        with feat_cols[i % 4]:
-                            st.metric(label, value)
-            
-            with tab4:
-                if results.get('email_data'):
-                    email_data = results['email_data']
-                    
-                    col_info1, col_info2 = st.columns(2)
-                    
-                    with col_info1:
-                        st.markdown("#### 📧 Email Metadata")
-                        metadata = {
-                            "Filename": email_data.get('filename', 'N/A'),
-                            "Subject": email_data.get('subject', 'N/A'),
-                            "From": email_data.get('from', 'N/A'),
-                            "To": email_data.get('to', 'N/A'),
-                            "Date": email_data.get('date', 'N/A')
-                        }
-                        
-                        for key, value in metadata.items():
-                            st.markdown(f"**{key}:** {value}")
-                    
-                    with col_info2:
-                        st.markdown("#### 📊 Text Statistics")
-                        stats = {
-                            "Total Words": email_data.get('word_count', 0),
-                            "Total Characters": email_data.get('char_count', 0),
-                            "Language": email_data.get('detected_language', 'Unknown'),
-                            "File Type": email_data.get('file_type', 'text')
-                        }
-                        
-                        for key, value in stats.items():
-                            st.metric(key, value)
-            
-            # Экспорт результатов
-            st.markdown("---")
-            st.markdown("### 📥 Export Results")
-            
-            col_exp1, col_exp2 = st.columns(2)
-            
-            with col_exp1:
-                json_data = json.dumps(results, ensure_ascii=False, indent=2)
-                st.download_button(
-                    label="📄 Download JSON",
-                    data=json_data,
-                    file_name=f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
-            
-            with col_exp2:
-                if st.button("🔄 New Analysis", use_container_width=True):
-                    st.session_state.analysis_results = None
+            if category != "Не определена":
+                if st.button("🗑️", key=f"del_{i}", help="Удалить категорию"):
+                    st.session_state.categories.remove(category)
+                    with open(CATEGORIES_FILE, "w", encoding="utf-8") as f:
+                        json.dump(st.session_state.categories, f, ensure_ascii=False, indent=2)
+                    if ML_AVAILABLE:
+                        classifier.set_categories(st.session_state.categories)
                     st.rerun()
     
-    # ========== РЕЖИМ: ML INSIGHTS ==========
-    elif app_mode == "🤖 ML Insights":
-        st.markdown("## 🤖 Machine Learning Insights")
-        
-        if not ML_AVAILABLE:
-            st.warning("ML components are not available.")
-            return
-        
-        tab1, tab2, tab3 = st.tabs(["🧠 Model Info", "📊 Performance", "🔍 Technical"])
-        
-        with tab1:
-            st.markdown("### 🧠 Model Architecture")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("""
-                #### Sentence Transformers
-                
-                **Architecture:**
-                - Transformer-based (BERT-like)
-                - 12 layers, 768 hidden dimensions
-                - 12 attention heads
-                
-                **Training:**
-                - Multilingual (50+ languages)
-                - Siamese network structure
-                - Contrastive learning
-                
-                **Output:**
-                - 768-dimensional embeddings
-                - Cosine similarity for classification
-                - Zero-shot capability
-                """)
-            
-            with col2:
-                # Архитектурная диаграмма
-                st.markdown("#### 🏗️ Architecture Diagram")
-                
-                arch_html = """
-                <div style="text-align: center; padding: 1rem; background: #f8f9fa; border-radius: 10px;">
-                    <div style="margin: 0.5rem; padding: 0.5rem; background: #e3f2fd; border-radius: 5px;">
-                        <strong>Input Text</strong><br>
-                        📧 Email Content
-                    </div>
-                    <div>↓ Tokenization</div>
-                    <div style="margin: 0.5rem; padding: 0.5rem; background: #f3e5f5; border-radius: 5px;">
-                        <strong>Transformer Layers</strong><br>
-                        12 × (Self-Attention + FFN)
-                    </div>
-                    <div>↓ Pooling</div>
-                    <div style="margin: 0.5rem; padding: 0.5rem; background: #e8f5e8; border-radius: 5px;">
-                        <strong>Embeddings</strong><br>
-                        768-dimensional vector
-                    </div>
-                    <div>↓ Similarity</div>
-                    <div style="margin: 0.5rem; padding: 0.5rem; background: #fff3e0; border-radius: 5px;">
-                        <strong>Classification</strong><br>
-                        Cosine similarity with categories
-                    </div>
-                </div>
-                """
-                
-                st.markdown(arch_html, unsafe_allow_html=True)
-        
-        with tab2:
-            st.markdown("### 📊 Model Performance")
-            
-            # Сравнение моделей
-            fig_comparison = create_model_comparison()
-            st.plotly_chart(fig_comparison, use_container_width=True)
-            
-            # Метрики в реальном времени
-            if hasattr(monitor, 'get_statistics'):
-                stats = monitor.get_statistics()
-                
-                if stats:
-                    col_metric1, col_metric2, col_metric3 = st.columns(3)
-                    
-                    with col_metric1:
-                        st.metric("Total Predictions", stats.get('total_predictions', 0))
-                    
-                    with col_metric2:
-                        st.metric("Avg Confidence", f"{stats.get('avg_confidence', 0):.1%}")
-                    
-                    with col_metric3:
-                        st.metric("Undefined Rate", f"{stats.get('undefined_rate', 0):.1%}")
-            
-            # Технические детали
-            st.markdown("#### ⚙️ Technical Specifications")
-            
-            spec_cols = st.columns(4)
-            
-            with spec_cols[0]:
-                st.metric("Model Size", "~420MB")
-            
-            with spec_cols[1]:
-                st.metric("Inference Time", "~150ms")
-            
-            with spec_cols[2]:
-                st.metric("Vocabulary", "250K tokens")
-            
-            with spec_cols[3]:
-                st.metric("Languages", "50+")
-        
-        with tab3:
-            st.markdown("### 🔍 Technical Details")
-            
-            st.markdown("""
-            #### Zero-shot Classification
-            
-            **How it works:**
-            1. Text and categories are converted to embeddings
-            2. Cosine similarity is computed between them
-            3. Highest similarity determines the category
-            4. No training data required!
-            
-            **Advantages:**
-            - No need for labeled data
-            - Easy to add new categories
-            - Multilingual out of the box
-            - Fast inference
-            
-            #### Enhanced Features
-            
-            **Text Analysis:**
-            - Statistical features (length, word count, etc.)
-            - Stylistic features (formality, sentiment, etc.)
-            - Structural features (greetings, questions, etc.)
-            
-            **Ensemble Method:**
-            - Combines multiple ML approaches
-            - Improves accuracy and robustness
-            - Fallback mechanisms for edge cases
-            """)
-            
-            # Пример работы с эмбеддингами
-            st.markdown("#### 🎯 Example: Embedding Similarity")
-            
-            example_text = "Business partnership proposal with revenue sharing"
-            example_categories = ["Business", "Finance", "Personal", "Technical"]
-            
-            st.code(f"""
-            Text: "{example_text}"
-            
-            Similarities with categories:
-            - Business: 0.92
-            - Finance: 0.85  
-            - Personal: 0.31
-            - Technical: 0.18
-            
-            Result: Business (highest similarity)
-            """, language="python")
-    
-    # ========== РЕЖИМ: BENCHMARK ==========
-    elif app_mode == "⚡ Benchmark":
-        st.markdown("## ⚡ Model Benchmarking")
-        
-        if not ML_AVAILABLE:
-            st.warning("ML components are not available.")
-            return
-        
-        st.info("""
-        Test the performance of our ML model with different configurations.
-        The benchmark uses predefined test cases to measure accuracy and speed.
-        """)
-        
-        # Настройки бенчмарка
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            benchmark_mode = st.selectbox(
-                "Test Mode:",
-                ["Quick (10 runs)", "Standard (50 runs)", "Comprehensive (100 runs)"]
-            )
-            
-            n_runs = 10 if "Quick" in benchmark_mode else 50 if "Standard" in benchmark_mode else 100
-        
-        with col2:
-            test_config = st.multiselect(
-                "Test Configurations:",
-                ["Basic Model", "With Features", "Ensemble Mode", "All Configurations"],
-                default=["Basic Model", "Ensemble Mode"]
-            )
-        
-        if st.button("🚀 Run Benchmark", type="primary", use_container_width=True):
-            with st.spinner("Running benchmarks... This may take a moment."):
-                progress = st.progress(0)
-                
-                try:
-                    progress.progress(30)
-                    results = benchmark.run_benchmarks(classifier, n_runs=n_runs)
-                    
-                    progress.progress(70)
-                    st.session_state.benchmark_results = results
-                    
-                    progress.progress(100)
-                    
-                    st.success("✅ Benchmark completed!")
-                    
-                except Exception as e:
-                    st.error(f"❌ Benchmark failed: {str(e)}")
-        
-        # Отображение результатов
-        if st.session_state.get('benchmark_results'):
-            results = st.session_state.benchmark_results
-            
-            st.markdown("---")
-            st.markdown("## 📊 Benchmark Results")
-            
-            # Основные метрики
-            if 'accuracy' in results:
-                acc = results['accuracy']
-                st.markdown(f"### 🎯 Accuracy: **{acc.get('accuracy', 0):.1%}**")
-                st.markdown(f"**Correct:** {acc.get('correct', 0)} / {acc.get('total', 0)} examples")
-            
-            if 'speed' in results:
-                speed = results['speed']
-                st.markdown(f"### ⚡ Speed: **{speed.get('avg_time_ms', 0):.0f} ms**")
-                st.markdown(f"**Throughput:** {speed.get('throughput_per_second', 0):.1f} emails/sec")
-            
-            # Визуализации
-            st.markdown("---")
-            st.markdown("### 📈 Visualizations")
-            
-            if hasattr(benchmark, 'create_visualizations'):
-                benchmark_figs = benchmark.create_visualizations()
-                
-                if benchmark_figs:
-                    for fig_name, fig in benchmark_figs.items():
-                        st.plotly_chart(fig, use_container_width=True)
-            
-            # Сравнение методов
-            if 'comparison' in results:
-                st.markdown("### ⚖️ Comparison with Other Methods")
-                
-                comp_data = results['comparison']
-                df = pd.DataFrame(comp_data)
-                
-                fig = px.scatter(
-                    df,
-                    x='speed_ms',
-                    y='accuracy',
-                    size='memory_mb',
-                    color='method',
-                    hover_name='method',
-                    title='Model Comparison',
-                    labels={
-                        'speed_ms': 'Processing Time (ms)',
-                        'accuracy': 'Accuracy',
-                        'memory_mb': 'Memory (MB)'
-                    }
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.dataframe(df, use_container_width=True)
-            
-            # Экспорт
-            st.markdown("---")
-            if st.button("📄 Download Benchmark Report", use_container_width=True):
-                report = benchmark.generate_report()
-                
-                st.download_button(
-                    label="Click to Download JSON",
-                    data=report,
-                    file_name=f"benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json"
-                )
-    
-    # ========== РЕЖИМ: PRESENTATION ==========
-    elif app_mode == "🏆 Presentation":
-        st.markdown("## 🏆 Hackathon Presentation")
-        
-        st.info("""
-        **For Hackathon Jury:** This presentation mode showcases the key features 
-        and capabilities of MailLens AI email classifier.
-        """)
-        
-        # Презентационные слайды
-        presenter = HackathonPresentation()
-        
-        # Упрощенная презентация
-        st.markdown("### 🎯 Key Features for Hackathon")
-        
-        features = [
-            ("🤖 **Zero-shot ML Classification**", 
-             "Works without training data using semantic similarity"),
-            
-            ("⚡ **High Performance**", 
-             "150ms inference time, 92% accuracy on test data"),
-            
-            ("🌍 **Multilingual Support**", 
-             "50+ languages out of the box with transformer embeddings"),
-            
-            ("🔬 **Advanced Text Analysis**", 
-             "25+ linguistic and statistical features extracted"),
-            
-            ("🎯 **Explainable AI**", 
-             "Visualizations of confidence, embeddings, and feature importance"),
-            
-            ("🚀 **Easy Deployment**", 
-             "Docker container, one-command setup, cloud-ready")
-        ]
-        
-        for feature, description in features:
-            st.markdown(f"""
-            <div class="ml-card">
-                <h4>{feature}</h4>
-                <p>{description}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Демо для жюри
-        st.markdown("---")
-        st.markdown("### 🎯 Live Demonstration")
-        
-        demo_col1, demo_col2 = st.columns(2)
-        
-        with demo_col1:
-            st.markdown("""
-            #### Quick Test Examples
-            
-            Try these test cases to see the model in action:
-            
-            1. **Business Proposal** - Formal business language
-            2. **Customer Complaint** - Emotional, urgent tone  
-            3. **Technical Support** - Problem description, questions
-            4. **Spam Email** - Promotional, urgent calls to action
-            
-            Use the **Email Analysis** mode to test these!
-            """)
-        
-        with demo_col2:
-            st.markdown("""
-            #### Technical Highlights
-            
-            **ML Architecture:**
-            - Sentence Transformers (multilingual-mpnet-base-v2)
-            - 768-dimensional embeddings
-            - Cosine similarity classification
-            
-            **Innovation:**
-            - No training data required
-            - Real-time feature extraction
-            - Ensemble methods for robustness
-            
-            **Results:**
-            - 92.4% accuracy on test set
-            - 142ms average processing time
-            - Support for .txt, .eml, .msg files
-            """)
-        
-        # Инструкции для жюри
-        st.markdown("---")
-        st.markdown("### 📋 For the Jury")
-        
-        st.markdown("""
-        **To evaluate MailLens AI:**
-        
-        1. **Test Accuracy:** Use the Email Analysis mode with different email types
-        2. **Check Speed:** Note the processing time shown in results
-        3. **Evaluate Features:** Explore ML Insights for technical details
-        4. **Compare Performance:** Run benchmarks to see model comparisons
-        5. **Test Edge Cases:** Try short, mixed-language, or unusual emails
-        
-        **Key Innovation Points:**
-        - Zero-shot learning capability
-        - Real-time text feature extraction  
-        - Multilingual support without extra training
-        - Visual explanations of ML decisions
-        """)
-        
-        # Кнопка для быстрого теста
-        if st.button("🚀 Quick Demo Test", type="primary", use_container_width=True):
-            st.session_state.app_mode = "📧 Email Analysis"
-            st.session_state.example_text = """Subject: Technical Support Request
-From: user@company.com
-
-Hello support team,
-
-I'm having issues with the login system. When I try to access my account, 
-I get error message "Invalid credentials" even though my password is correct.
-
-Could you please help me resolve this issue?
-
-Thank you,
-Alex Johnson"""
-            st.rerun()
-    
-    # ========== ФУТЕР ==========
+    # Добавление новой категории
     st.markdown("---")
-    
-    st.markdown(
-        "<div style='text-align: center; color: #6b7280; font-size: 0.9rem;'>"
-        "🤖 MailLens AI - Intelligent Email Classification • "
-        "Powered by Sentence Transformers • "
-        "Hackathon Project"
-        "</div>",
-        unsafe_allow_html=True
+    new_category = st.text_input(
+        "Новая категория",
+        placeholder="Например: Коммерческое предложение",
+        key="new_category_input"
     )
-
-# ========== ЗАПУСК ==========
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        st.error(f"❌ Application Error: {str(e)}")
-        if st.button("🔄 Restart"):
+    
+    col_add, col_reset = st.columns(2)
+    with col_add:
+        if st.button("➕ Добавить", type="primary", use_container_width=True):
+            if new_category and new_category.strip() not in st.session_state.categories:
+                st.session_state.categories.append(new_category.strip())
+                with open(CATEGORIES_FILE, "w", encoding="utf-8") as f:
+                    json.dump(st.session_state.categories, f, ensure_ascii=False, indent=2)
+                if ML_AVAILABLE:
+                    classifier.set_categories(st.session_state.categories)
+                st.success(f"Категория '{new_category.strip()}' добавлена")
+                st.rerun()
+    
+    with col_reset:
+        if st.button("🔄 Сбросить", use_container_width=True):
+            st.session_state.categories = DEFAULT_CATEGORIES.copy()
+            with open(CATEGORIES_FILE, "w", encoding="utf-8") as f:
+                json.dump(st.session_state.categories, f, ensure_ascii=False, indent=2)
+            if ML_AVAILABLE:
+                classifier.set_categories(st.session_state.categories)
             st.rerun()
+    
+    # Информация о системе
+    st.markdown("---")
+    st.markdown("### 📊 Информация о системе")
+    
+    if ML_AVAILABLE:
+        model_info = classifier.get_model_info()
+        st.metric("ML модель", model_info.get('model_name', 'Demo'))
+        st.metric("Категории", model_info.get('categories_count', 0))
+        st.metric("Порог", f"{threshold}%")
+    else:
+        st.warning("ML модель в демо-режиме")
+    
+    # Проверка тестовых данных
+    test_dir = Path("test_emails")
+    if test_dir.exists():
+        labels_file = test_dir / "labels.csv"
+        if labels_file.exists():
+            try:
+                df_labels = pd.read_csv(labels_file, encoding='utf-8-sig')
+                st.success(f"✅ Тестовых писем: {len(df_labels)}")
+            except:
+                st.info("📁 Папка test_emails найдена")
+        else:
+            st.warning("⚠️ labels.csv не найден")
+
+# ---------- ОСНОВНОЕ СОДЕРЖИМОЕ ----------
+tab1, tab2, tab3 = st.tabs(["📤 Анализ письма", "🎯 Few-Shot обучение", "📈 Бенчмаркинг"])
+
+# ---------- ВКЛАДКА 1: Анализ письма ----------
+with tab1:
+    st.markdown("## 📤 Анализ письма")
+    
+    col_upload, col_paste = st.columns(2)
+    
+    with col_upload:
+        st.markdown("### 📎 Загрузка файла")
+        uploaded_file = st.file_uploader(
+            "Загрузите email файл",
+            type=["eml", "txt", "msg"],
+            help="Поддерживаются форматы: .eml, .txt, .msg",
+            label_visibility="collapsed"
+        )
+    
+    with col_paste:
+        st.markdown("### 📝 Вставка текста")
+        manual_text = st.text_area(
+            "Или вставьте текст письма",
+            height=150,
+            placeholder="Вставьте текст письма здесь...",
+            label_visibility="collapsed"
+        )
+    
+    # Определение источника текста
+    text_to_classify = ""
+    source_type = "none"
+    
+    if uploaded_file is not None:
+        try:
+            content = uploaded_file.getvalue()
+            # Пробуем разные кодировки
+            for encoding in ['utf-8', 'utf-8-sig', 'cp1251', 'windows-1251']:
+                try:
+                    text_to_classify = content.decode(encoding)
+                    break
+                except:
+                    continue
+            else:
+                text_to_classify = content.decode('utf-8', errors='ignore')
+            
+            source_type = "file"
+            st.success(f"✅ Файл загружен: {uploaded_file.name} ({len(content)} байт)")
+        except Exception as e:
+            st.error(f"❌ Ошибка чтения файла: {e}")
+    
+    elif manual_text and len(manual_text.strip()) > 10:
+        text_to_classify = manual_text.strip()
+        source_type = "text"
+        st.success(f"✅ Текст принят ({len(text_to_classify)} символов)")
+    
+    # Классификация
+    if text_to_classify and source_type != "none":
+        st.markdown("---")
+        st.markdown("### 🧠 Результат классификации")
+        
+        if st.button("🚀 Запустить классификацию", type="primary", use_container_width=True):
+            with st.spinner("Анализирую письмо..."):
+                start_time = time.time()
+                
+                if ML_AVAILABLE:
+                    result = classifier.classify(text_to_classify, top_n=3)
+                else:
+                    # Демо-режим
+                    result = {
+                        'predicted_category': "Не определена",
+                        'confidence': 0.5,
+                        'is_undefined': True,
+                        'top_categories': [],
+                        'method': 'demo-mode'
+                    }
+                
+                processing_time = time.time() - start_time
+                
+                # Отображение результатов
+                col_cat, col_conf, col_time = st.columns(3)
+                
+                with col_cat:
+                    category = result.get('predicted_category', 'Не определена')
+                    st.markdown(f'<div class="metric-card"><div class="metric-value">{category}</div><div class="metric-label">Категория</div></div>', unsafe_allow_html=True)
+                
+                with col_conf:
+                    confidence = result.get('confidence', 0.0)
+                    st.markdown(f'<div class="metric-card"><div class="metric-value">{confidence:.1%}</div><div class="metric-label">Уверенность</div></div>', unsafe_allow_html=True)
+                
+                with col_time:
+                    st.markdown(f'<div class="metric-card"><div class="metric-value">{processing_time:.3f}s</div><div class="metric-label">Время обработки</div></div>', unsafe_allow_html=True)
+                
+                # Прогресс-бар уверенности
+                st.markdown('<div class="confidence-container">', unsafe_allow_html=True)
+                st.markdown(f'<div class="confidence-label"><span>Уверенность классификации</span><span>{confidence:.1%}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="confidence-bar"><div class="confidence-fill" style="width: {confidence*100}%"></div></div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Статус
+                is_undefined = result.get('is_undefined', True)
+                status = "🟡 Не определена" if is_undefined else "🟢 Классифицировано"
+                status_color = "warning" if is_undefined else "success"
+                st.markdown(f"**Статус:** <span style='color: var(--{status_color})'>{status}</span>", unsafe_allow_html=True)
+                
+                # Метод классификации
+                method = result.get('method', 'unknown')
+                st.caption(f"Метод: {method}")
+                
+                # Топ категории
+                if 'top_categories' in result and result['top_categories']:
+                    st.markdown("### 🏆 Топ категории")
+                    top_df = pd.DataFrame(result['top_categories'])
+                    st.dataframe(top_df, use_container_width=True)
+                    
+                    # Визуализация
+                    fig = px.bar(
+                        top_df, 
+                        x='category', 
+                        y='score',
+                        color='score',
+                        color_continuous_scale='Viridis',
+                        title='Уверенность по категориям'
+                    )
+                    fig.update_layout(height=300)
+                    st.plotly_chart(fig, use_container_width=True)
+
+# ---------- ВКЛАДКА 2: Few-Shot обучение ----------
+with tab2:
+    st.markdown("## 🎯 Few-Shot обучение")
+    
+    if not ML_AVAILABLE:
+        st.warning("⚠️ Few-Shot обучение доступно только при загруженной ML модели")
+    else:
+        st.info("Добавьте примеры писем для улучшения классификации по конкретным категориям")
+        
+        col_category, col_example = st.columns([1, 2])
+        
+        with col_category:
+            selected_category = st.selectbox(
+                "Выберите категорию",
+                options=st.session_state.categories,
+                key="fewshot_category"
+            )
+        
+        with col_example:
+            example_text = st.text_area(
+                "Текст примера письма",
+                height=150,
+                placeholder="Введите текст письма, который относится к выбранной категории...",
+                key="fewshot_text"
+            )
+        
+        if st.button("➕ Добавить пример", type="primary", use_container_width=True):
+            if example_text and len(example_text.strip()) > 20:
+                try:
+                    classifier.add_few_shot_example(selected_category, example_text)
+                    st.success(f"✅ Пример добавлен для категории '{selected_category}'")
+                    
+                    # Показываем статистику
+                    model_info = classifier.get_model_info()
+                    few_shot_stats = model_info.get('few_shot_examples', {})
+                    
+                    st.markdown("### 📊 Статистика Few-Shot примеров")
+                    stats_df = pd.DataFrame([
+                        {"Категория": cat, "Примеров": count}
+                        for cat, count in few_shot_stats.items()
+                    ])
+                    
+                    if not stats_df.empty:
+                        st.dataframe(stats_df, use_container_width=True)
+                except Exception as e:
+                    st.error(f"❌ Ошибка добавления примера: {e}")
+        
+        # Очистка кэша
+        st.markdown("---")
+        if st.button("🧹 Очистить кэш классификатора", use_container_width=True):
+            try:
+                classifier.clear_cache()
+                st.success("✅ Кэш очищен")
+            except:
+                st.info("Кэш не поддерживается в демо-режиме")
+
+# ---------- ВКЛАДКА 3: Бенчмаркинг ----------
+with tab3:
+    st.markdown("## 📈 Бенчмаркинг системы")
+    
+    # Проверка тестовых данных
+    test_dir = Path("test_emails")
+    labels_found = False
+    
+    if test_dir.exists():
+        labels_file = test_dir / "labels.csv"
+        if labels_file.exists():
+            try:
+                df_check = pd.read_csv(labels_file, encoding='utf-8-sig')
+                total_emails = len(df_check)
+                labels_found = True
+                
+                st.success(f"✅ Найдено тестовых писем: {total_emails}")
+                
+                # Показываем распределение категорий
+                st.markdown("### 📊 Распределение категорий в тестовых данных")
+                category_dist = df_check['true_category'].value_counts()
+                
+                col_dist1, col_dist2 = st.columns(2)
+                
+                with col_dist1:
+                    fig_dist = px.pie(
+                        values=category_dist.values,
+                        names=category_dist.index,
+                        title='Распределение категорий',
+                        hole=0.4
+                    )
+                    fig_dist.update_layout(height=300)
+                    st.plotly_chart(fig_dist, use_container_width=True)
+                
+                with col_dist2:
+                    st.dataframe(category_dist, use_container_width=True)
+                
+            except Exception as e:
+                st.error(f"❌ Ошибка чтения labels.csv: {e}")
+        else:
+            st.warning("⚠️ Файл labels.csv не найден в папке test_emails")
+    else:
+        st.info("📁 Папка test_emails не найдена. Бенчмарк будет использовать демо-данные.")
+    
+    # Настройки бенчмарка
+    st.markdown("### ⚙️ Настройки бенчмарка")
+    
+    col_samples, col_mode = st.columns(2)
+    
+    with col_samples:
+        if labels_found:
+            max_samples = min(total_emails, 500)
+            num_samples = st.slider(
+                "Количество писем для теста",
+                min_value=10,
+                max_value=max_samples,
+                value=min(100, max_samples),
+                step=10,
+                help=f"Всего доступно: {total_emails} писем"
+            )
+        else:
+            num_samples = st.slider(
+                "Количество писем для теста",
+                min_value=10,
+                max_value=200,
+                value=50,
+                step=10
+            )
+    
+    with col_mode:
+        benchmark_mode = st.radio(
+            "Режим тестирования",
+            ["Полный тест", "Быстрый тест"],
+            horizontal=True,
+            help="Полный тест включает сохранение результатов и детальную статистику"
+        )
+    
+    # Кнопка запуска бенчмарка
+    if st.button("🚀 Запустить бенчмарк", type="primary", use_container_width=True):
+        if not ML_AVAILABLE:
+            st.warning("⚠️ ML модель не загружена. Бенчмарк будет работать в демо-режиме.")
+        
+        with st.spinner(f"Запуск бенчмарка на {num_samples} письмах..."):
+            try:
+                from benchmark import ModelBenchmark
+                
+                # Запуск бенчмарка
+                benchmark = ModelBenchmark("test_emails")
+                results_df = benchmark.run_classification_benchmark(classifier, num_samples)
+                
+                if results_df.empty:
+                    st.error("❌ Бенчмарк вернул пустые результаты")
+                else:
+                    # Сохранение в session state
+                    st.session_state.benchmark_results = results_df
+                    
+                    # Расчёт метрик
+                    metrics = benchmark.calculate_metrics(results_df)
+                    
+                    # Отображение метрик
+                    st.markdown("### 📊 Результаты бенчмарка")
+                    
+                    col_acc, col_time, col_undef, col_conf = st.columns(4)
+                    
+                    with col_acc:
+                        accuracy = metrics['accuracy']
+                        accuracy_color = "success" if accuracy > 0.7 else "warning" if accuracy > 0.5 else "danger"
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-value" style="color: var(--{accuracy_color})">{accuracy:.1%}</div>
+                            <div class="metric-label">Точность</div>
+                            <div style="font-size: 0.8rem; color: var(--gray); margin-top: 0.5rem;">
+                                {metrics['correct_predictions']}/{metrics['total_emails']}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_time:
+                        avg_time = metrics['avg_time_ms']
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-value">{avg_time:.1f} мс</div>
+                            <div class="metric-label">Среднее время</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_undef:
+                        undef_rate = metrics['undefined_rate']
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-value">{undef_rate:.1f}%</div>
+                            <div class="metric-label">Не определено</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_conf:
+                        avg_conf = metrics.get('avg_confidence', 0.0)
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-value">{avg_conf:.1%}</div>
+                            <div class="metric-label">Средняя уверенность</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Детальная статистика
+                    st.markdown("### 📋 Детальная статистика")
+                    
+                    # Матрица ошибок
+                    st.markdown("#### Матрица ошибок")
+                    if 'true_category' in results_df.columns and 'predicted_category' in results_df.columns:
+                        confusion_data = results_df.groupby(['true_category', 'predicted_category']).size().reset_index(name='count')
+                        fig_confusion = px.density_heatmap(
+                            confusion_data,
+                            x='predicted_category',
+                            y='true_category',
+                            z='count',
+                            color_continuous_scale='Viridis',
+                            title='Матрица классификации'
+                        )
+                        fig_confusion.update_layout(height=400)
+                        st.plotly_chart(fig_confusion, use_container_width=True)
+                    
+                    # Топ-10 результатов
+                    st.markdown("#### Топ-10 результатов")
+                    display_df = results_df[['filename', 'true_category', 'predicted_category', 'confidence', 'time_ms', 'is_correct']].head(10)
+                    st.dataframe(
+                        display_df.style.applymap(
+                            lambda x: 'background-color: #dcfce7' if x == True else ('background-color: #fee2e2' if x == False else ''),
+                            subset=['is_correct']
+                        ),
+                        use_container_width=True
+                    )
+                    
+                    # Распределение времени обработки
+                    st.markdown("#### Распределение времени обработки")
+                    fig_time = px.histogram(
+                        results_df,
+                        x='time_ms',
+                        nbins=20,
+                        title='Время обработки писем',
+                        labels={'time_ms': 'Время (мс)'}
+                    )
+                    fig_time.update_layout(height=300)
+                    st.plotly_chart(fig_time, use_container_width=True)
+                    
+                    # Скачивание результатов
+                    st.markdown("---")
+                    csv_data = results_df.to_csv(index=False, encoding='utf-8-sig')
+                    st.download_button(
+                        label="📥 Скачать полные результаты",
+                        data=csv_data,
+                        file_name=f"benchmark_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+            
+            except Exception as e:
+                st.error(f"❌ Ошибка выполнения бенчмарка: {str(e)}")
+                st.exception(e)
+    
+    # Загрузка предыдущих результатов
+    st.markdown("---")
+    st.markdown("### 📂 Загрузка сохранённых результатов")
+    
+    if BENCHMARK_RESULTS_FILE.exists():
+        try:
+            saved_results = pd.read_csv(BENCHMARK_RESULTS_FILE, encoding='utf-8-sig')
+            st.success(f"✅ Найден сохранённый файл с {len(saved_results)} результатами")
+            
+            if st.button("📊 Загрузить сохранённые результаты", use_container_width=True):
+                st.session_state.benchmark_results = saved_results
+                st.rerun()
+        except:
+            st.info("Нет доступных сохранённых результатов")
+
+# ---------- ФУТЕР ----------
+st.markdown("---")
+col_footer1, col_footer2, col_footer3 = st.columns(3)
+
+with col_footer1:
+    st.caption("🤖 Intelligent Email Classifier")
+    st.caption("Zero-shot & Few-shot классификация")
+
+with col_footer2:
+    st.caption("📧 Поддержка форматов: .eml, .txt, .msg")
+    st.caption("🌍 Мультиязычная обработка")
+
+with col_footer3:
+    st.caption("⚡ Быстрая обработка")
+    st.caption("📊 Детальная аналитика")
+
+# Отображение загруженных результатов бенчмарка
+if st.session_state.benchmark_results is not None:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 📈 Последние результаты")
+    
+    results_df = st.session_state.benchmark_results
+    accuracy = results_df['is_correct'].mean() if 'is_correct' in results_df.columns else 0
+    
+    st.sidebar.metric("Последняя точность", f"{accuracy:.1%}")
+    st.sidebar.caption(f"На основе {len(results_df)} писем")
+    
+    if st.sidebar.button("Очистить результаты", use_container_width=True):
+        st.session_state.benchmark_results = None
+        st.rerun()
