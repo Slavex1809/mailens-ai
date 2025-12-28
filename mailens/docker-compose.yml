@@ -1,40 +1,12 @@
-version: '3.8'
-
 services:
-  mailens-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: mailens-ai
+  app:
+    build: .
     ports:
       - "8501:8501"
-    environment:
-      - STREAMLIT_SERVER_PORT=8501
-      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
-      - PYTHONUNBUFFERED=1
-      - ML_MODEL_NAME=paraphrase-multilingual-MiniLM-L12-v2  # ← легче, быстрее, достаточно для zero-shot
     volumes:
-      - ./test_emails:/app/test_emails  # только тестовые письма
-      - ml-cache:/root/.cache           # кэш моделей — в ~/.cache/huggingface/
+      - ./app:/app/app
+      - ./config:/app/config
+      - ./test_emails:/app/test_emails
+    environment:
+      - PYTHONPATH=/app:/app/app
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
-    networks:
-      - mailens-network
-
-volumes:
-  ml-cache:
-
-networks:
-  mailens-network:
-    driver: bridge
